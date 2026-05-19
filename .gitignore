@@ -7,7 +7,6 @@ venv/
 .terraform/
 *.tfstate
 *.tfstate.*
-.terraform.lock.hcl
 terraform/terraform.tfvars
 *.log
 .DS_Store
