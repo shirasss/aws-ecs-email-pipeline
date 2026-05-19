@@ -184,6 +184,8 @@ push to `main` and let GitHub Actions build, scan, push to ECR, and deploy to EC
 **CI/CD tool:** **GitHub Actions**.  
 An optional AWS-native CI/CD implementation is documented in `terraform/CodePipeline-CICD/` using CodePipeline and CodeBuild.
 
+**Live run history:** https://github.com/shirasss/aws-ecs-email-pipeline/actions
+
 | Workflow | File | Deploys to |
 |----------|------|------------|
 | CI/CD — API (service1) | `.github/workflows/ci-cd-api.yml` | `email-pipeline-api-service` |
@@ -262,7 +264,7 @@ $API_URL = terraform output -raw api_endpoint
 Invoke-RestMethod -Uri "$API_URL/healthz"
 ```
 
-Expected: `status : ok`
+Expected: `status : ok!`
 
 ### 2. Submit a message
 
