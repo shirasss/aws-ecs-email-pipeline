@@ -19,6 +19,8 @@ This repository implements a **two-service microservice system** (REST API + bac
 
 ## Architecture
 
+### Application
+
 ```mermaid
 flowchart LR
     Client([Client]) --> ALB[Application Load Balancer]
@@ -33,19 +35,22 @@ flowchart LR
         API
         Worker
     end
+```
 
-    subgraph CI/CD - GitHub Actions
-        GA1[ci-cd-api.yml]
-        GA2[ci-cd-worker.yml]
-        GA1 --> Test1[pytest]
-        Test1 --> Build1[docker build + Trivy]
-        Build1 --> ECR1[API service ECR push]
-        ECR1 --> ECS1[ECS deploy API]
-        GA2 --> Test2[pytest]
-        Test2 --> Build2[docker build + Trivy]
-        Build2 --> ECR2[Worker service ECR push]
-        ECR2 --> ECS2[ECS deploy Worker]
-    end
+### CI/CD (GitHub Actions)
+
+```mermaid
+flowchart LR
+    GA1[ci-cd-api.yml]
+    GA2[ci-cd-worker.yml]
+    GA1 --> Test1[pytest]
+    Test1 --> Build1[docker build + Trivy]
+    Build1 --> ECR1[API service ECR push]
+    ECR1 --> ECS1[ECS deploy API]
+    GA2 --> Test2[pytest]
+    Test2 --> Build2[docker build + Trivy]
+    Build2 --> ECR2[Worker service ECR push]
+    ECR2 --> ECS2[ECS deploy Worker]
 ```
 
 ### Request flow
@@ -155,17 +160,6 @@ terraform plan
 terraform apply
 ```
 
-Useful outputs:
-
-```bash
-terraform output api_endpoint
-terraform output -raw s3_bucket_name
-terraform output -raw sqs_queue_url
-terraform output -raw ssm_token_parameter_name
-terraform output -raw ecs_cluster_name
-terraform output -raw cloudwatch_dashboard_name
-```
-
 **Remote Terraform state:** `providers.tf` uses an S3 backend (`terraform-state-email-pipeline`) with DynamoDB locking. In a fresh AWS account, bootstrap those resources first:
 
 ```bash
@@ -173,9 +167,6 @@ terraform output -raw cloudwatch_dashboard_name
 terraform init
 terraform apply \
   -target=aws_s3_bucket.tf_state \
-  -target=aws_s3_bucket_versioning.tf_state \
-  -target=aws_s3_bucket_server_side_encryption_configuration.tf_state \
-  -target=aws_s3_bucket_public_access_block.tf_state \
   -target=aws_dynamodb_table.terraform_lock
 
 # Uncomment the backend "s3" block, then migrate local state
@@ -351,11 +342,6 @@ Worker status (not exposed on ALB).
 | Terraform | `terraform/monitoring.tf` |
 | Container Insights | Enabled on ECS cluster |
 
-```bash
-terraform output -raw cloudwatch_dashboard_name
-```
-
-Console (if available): CloudWatch → Dashboards → `ecs-email-pipeline-dashboards` (region `us-east-2`).
 
 ### Alarms & SNS email
 
@@ -371,32 +357,14 @@ Set `alert_emails` in `terraform/terraform.tfvars` (see `terraform.tfvars.exampl
 | `email-pipeline-api-log-errors` | ERROR lines in API logs |
 | `email-pipeline-worker-log-errors` | ERROR lines in worker logs |
 
-```powershell
-terraform output -raw alarm_sns_topic_arn
-aws cloudwatch describe-alarms --alarm-name-prefix email-pipeline --region us-east-2 `
-  --query "MetricAlarms[].{Name:AlarmName,State:StateValue}" --output table
-```
 
-Leave `alert_emails = []` to skip SNS (alarms still fire in CloudWatch without email).
+Leave `alert_emails = []` to skip SNS 
 
 ### View logs (CLI)
 
 ```powershell
 aws logs tail /ecs/email-pipeline-api --since 30m --region us-east-2 --format short
 aws logs tail /ecs/email-pipeline-worker --since 30m --region us-east-2 --format short
-```
-
-### Monitor CI/CD
-
-1. GitHub → **Actions**
-2. Workflows: **CI/CD — API (service1)** and **CI/CD — Worker (service2)**
-3. Each run: **Test** → **CI** (build, Trivy, ECR push) → **CD** (ECS deploy)
-
-Optional badges (replace `OWNER/REPO`):
-
-```markdown
-![API CI/CD](https://github.com/OWNER/REPO/actions/workflows/ci-cd-api.yml/badge.svg)
-![Worker CI/CD](https://github.com/OWNER/REPO/actions/workflows/ci-cd-worker.yml/badge.svg)
 ```
 
 ### Security scanning
