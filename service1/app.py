@@ -97,7 +97,7 @@ def publish_to_queue(data):
 
 @app.route("/healthz", methods=["GET"])
 def health_check():
-    return jsonify({"status": "ok"}), 200
+    return jsonify({"status": "ok!"}), 200
 
 
 @app.route("/messages", methods=["POST"])
