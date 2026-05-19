@@ -7,8 +7,9 @@ This repository implements a **two-service microservice system** (REST API + bac
 | Layer | Stack |
 |-------|--------|
 | **Runtime** | Python / Flask on **ECS Fargate** |
+| **Ingress** | **Application Load Balancer** (public, HTTP) |
 | **Messaging & storage** | **SQS** (with DLQ) → **S3** |
-| **ALB** | **SSM Parameter Store** token |
+| **Secrets** | **SSM Parameter Store** (`SecureString`) for the API auth token |
 | **IaC** | **Terraform** (`terraform/`) |
 | **CI/CD** | **GitHub Actions** — test → build → **Trivy** scan → ECR push → ECS deploy |
 | **Observability** | **CloudWatch** dashboards, alarms, and structured logs |
