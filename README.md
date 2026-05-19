@@ -224,6 +224,13 @@ keys. The trust policy is scoped to this repository in Terraform.
 **Image tag:** Git commit SHA (`github.sha`), e.g.  
 `371670420772.dkr.ecr.us-east-2.amazonaws.com/email-pipeline-backend-api-ecr:<sha>`
 
+### Security scanning
+
+Two layers of image vulnerability scanning, both wired into the pipeline:
+
+- **Trivy** in CI (`scripts/trivy-scan.sh`) — blocks the build on `HIGH` / `CRITICAL` CVEs, so a vulnerable image never reaches ECR.
+- **ECR scan-on-push** — enabled in Terraform (`terraform/ecr.tf`) as a second layer; results surface in the ECR console.
+
 ### Path triggers
 
 Workflows run on push to `main` when relevant paths change:
@@ -367,11 +374,6 @@ Leave `alert_emails = []` to skip SNS
 aws logs tail /ecs/email-pipeline-api --since 30m --region us-east-2 --format short
 aws logs tail /ecs/email-pipeline-worker --since 30m --region us-east-2 --format short
 ```
-
-### Security scanning
-
-- **Trivy** in CI — blocks push/deploy on HIGH/CRITICAL
-- **ECR scan on push** — enabled in Terraform
 
 ### Generate metrics
 
