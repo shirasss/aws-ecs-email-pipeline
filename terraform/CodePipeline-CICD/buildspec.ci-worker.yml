@@ -1,0 +1,35 @@
+version: 0.2
+
+env:
+  variables:
+    AWS_REGION: us-east-2
+    ECR_REPO: email-pipeline-backend-worker-ecr
+    SERVICE_DIR: service2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.11
+    commands:
+      - pip install -r "${CODEBUILD_SRC_DIR}/${SERVICE_DIR}/requirements.txt" pytest==8.4.0
+
+  pre_build:
+    commands:
+      - (cd "${CODEBUILD_SRC_DIR}/${SERVICE_DIR}" && PYTHONPATH=. pytest -v tests/)
+      - aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$(aws sts get-caller-identity --query Account --output text).dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+  build:
+    commands:
+      - |
+        set -e
+        cd "$CODEBUILD_SRC_DIR"
+        IMAGE_TAG="${CODEBUILD_RESOLVED_SOURCE_VERSION:-latest}"
+        IMAGE_URI="$(aws ecr describe-repositories --repository-names "$ECR_REPO" --query 'repositories[0].repositoryUri' --output text)"
+        docker build -t "${IMAGE_URI}:${IMAGE_TAG}" "${CODEBUILD_SRC_DIR}/${SERVICE_DIR}"
+        bash "${CODEBUILD_SRC_DIR}/scripts/trivy-scan.sh" "${IMAGE_URI}:${IMAGE_TAG}"
+        docker push "${IMAGE_URI}:${IMAGE_TAG}"
+        printf '[{"name":"email-pipeline-worker-container","imageUri":"%s:%s"}]' "$IMAGE_URI" "$IMAGE_TAG" > "${CODEBUILD_SRC_DIR}/imagedefinitions.json"
+
+artifacts:
+  files:
+    - imagedefinitions.json

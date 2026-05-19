@@ -1,0 +1,28 @@
+aws_region = "us-east-2"
+
+# Auth token stored in SSM Parameter Store (SecureString).
+auth_token = "REPLACE_WITH_AUTH_TOKEN"
+
+# Image tags are seeded to "latest" on first apply; CI/CD overrides with
+# the git commit SHA on subsequent deploys.
+backend_image_tag = "latest"
+worker_image_tag  = "latest"
+
+desired_count                         = 1
+api_max_capacity                      = 2
+worker_desired_count                  = 1
+worker_max_capacity                   = 2
+worker_scale_target_messages_per_task = 5
+
+task_cpu    = "256"
+task_memory = "512"
+
+worker_poll_interval_seconds = 10
+
+github_actions_repository = ""
+
+# Each address receives an SNS confirmation email after `terraform apply`
+# and must click the confirmation link. Leave empty to skip SNS.
+alert_emails = [
+  # "you@example.com",
+]
