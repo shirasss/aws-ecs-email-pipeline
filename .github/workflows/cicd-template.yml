@@ -1,0 +1,113 @@
+# Reusable CI/CD template: test -> build -> Trivy scan -> ECR push -> ECS deploy.
+# Auth to AWS uses OIDC (short-lived STS credentials), not static access keys.
+name: ECS service CI/CD
+
+on:
+  workflow_call:
+    inputs:
+      service_dir:    { required: true,  type: string }
+      ecr_repo:       { required: true,  type: string }
+      container_name: { required: true,  type: string }
+      ecs_cluster:    { required: true,  type: string }
+      ecs_service:    { required: true,  type: string }
+      aws_region:     { required: false, type: string, default: us-east-2 }
+    secrets:
+      AWS_DEPLOY_ROLE_ARN:
+        required: true
+        description: "ARN of the IAM role assumed via OIDC (Terraform output github_actions_role_arn)."
+
+# OIDC token + repo checkout. No long-lived AWS keys.
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: ${{ inputs.service_dir }}/requirements.txt
+      - name: Install dependencies
+        run: pip install -r "${{ inputs.service_dir }}/requirements.txt" pytest==8.4.0
+      - name: Run pytest
+        run: cd "${{ inputs.service_dir }}" && PYTHONPATH=. pytest -v tests/
+
+  ci:
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      image_uri: ${{ steps.push.outputs.image_uri }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: gha-${{ inputs.service_dir }}-ci-${{ github.run_id }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      - name: Build Docker image
+        id: build
+        env:
+          IMAGE_URI: ${{ steps.ecr.outputs.registry }}/${{ inputs.ecr_repo }}:${{ github.sha }}
+        run: |
+          docker build -t "$IMAGE_URI" "${{ inputs.service_dir }}"
+          echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+
+      - name: Trivy scan (fail on HIGH/CRITICAL — no push if this fails)
+        run: bash scripts/trivy-scan.sh "${{ steps.build.outputs.image_uri }}"
+
+      - name: Push to ECR
+        id: push
+        run: |
+          docker push "${{ steps.build.outputs.image_uri }}"
+          echo "image_uri=${{ steps.build.outputs.image_uri }}" >> "$GITHUB_OUTPUT"
+
+  cd:
+    needs: ci
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: gha-${{ inputs.service_dir }}-cd-${{ github.run_id }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Download current task definition
+        run: |
+          set -euo pipefail
+          TASK_DEF="$(aws ecs describe-services \
+            --cluster "${{ inputs.ecs_cluster }}" \
+            --services "${{ inputs.ecs_service }}" \
+            --query 'services[0].taskDefinition' --output text)"
+          aws ecs describe-task-definition \
+            --task-definition "$TASK_DEF" \
+            --query taskDefinition \
+            | jq 'del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy,.enableFaultInjection)' \
+            > task-definition.json
+
+      - uses: aws-actions/amazon-ecs-render-task-definition@v1
+        id: render
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ inputs.container_name }}
+          image: ${{ needs.ci.outputs.image_uri }}
+
+      - uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          service: ${{ inputs.ecs_service }}
+          cluster: ${{ inputs.ecs_cluster }}
+          wait-for-service-stability: true

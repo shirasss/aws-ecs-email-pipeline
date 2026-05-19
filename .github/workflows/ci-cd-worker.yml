@@ -1,0 +1,36 @@
+# Side-by-side with CodePipeline email-pipeline-service2 (same paths, same ECS deploy behavior).
+name: CI/CD — Worker (service2)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "service2/**"
+      - "buildspec.ci-worker.yml"
+      - "scripts/trivy-scan.sh"
+      - ".github/workflows/ci-cd-worker.yml"
+      - ".github/workflows/cicd-template.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: production-worker-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  ci-cd:
+    uses: ./.github/workflows/cicd-template.yml
+    secrets: inherit
+    permissions:
+      id-token: write
+      contents: read
+    with:
+      service_dir: service2
+      ecr_repo: email-pipeline-backend-worker-ecr
+      container_name: email-pipeline-worker-container
+      ecs_cluster: email-pipeline-ecs-cluster
+      ecs_service: email-pipeline-worker-service
+      aws_region: us-east-2
