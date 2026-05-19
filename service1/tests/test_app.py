@@ -1,4 +1,15 @@
+import os
+
 import pytest
+
+# Keep test imports isolated from real AWS metadata/credentials lookup.
+os.environ.setdefault("AWS_EC2_METADATA_DISABLED", "true")
+os.environ.setdefault("AWS_REGION", "us-east-2")
+os.environ.setdefault(
+    "QUEUE_URL",
+    "https://sqs.us-east-2.amazonaws.com/123456789012/test-queue",
+)
+os.environ.setdefault("TOKEN_PARAMETER_NAME", "/email-pipeline/test-token")
 
 from app import validate_payload
 

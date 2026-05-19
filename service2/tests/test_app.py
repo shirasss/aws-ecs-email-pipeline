@@ -1,9 +1,22 @@
 """Unit tests for service2 (the SQS-to-S3 worker)."""
 
 import json
+import os
 
 import pytest
 from botocore.exceptions import ClientError
+
+# Must be set before importing service2.app so the background poller does not
+# start during unit tests and no real AWS calls are made.
+os.environ.setdefault("AWS_EC2_METADATA_DISABLED", "true")
+os.environ.setdefault("ENABLE_SQS_POLLER", "false")
+os.environ.setdefault("AWS_REGION", "us-east-2")
+os.environ.setdefault(
+    "QUEUE_URL",
+    "https://sqs.us-east-2.amazonaws.com/123456789012/test-queue",
+)
+os.environ.setdefault("BUCKET_NAME", "email-pipeline-test-bucket")
+os.environ.setdefault("POLL_INTERVAL_SECONDS", "1")
 
 import app as app_module
 from app import (
@@ -11,6 +24,44 @@ from app import (
     safe_json_load,
     upload_message_to_s3,
 )
+
+
+class FakeS3Client:
+    def __init__(self, raise_exc=None):
+        self.raise_exc = raise_exc
+        self.put_calls = []
+
+    def put_object(self, **kwargs):
+        self.put_calls.append(kwargs)
+        if self.raise_exc is not None:
+            raise self.raise_exc
+
+
+class FakeSQSClient:
+    def __init__(self, raise_exc_on_delete=None):
+        self.raise_exc_on_delete = raise_exc_on_delete
+        self.deleted_receipts = []
+
+    def delete_message(self, **kwargs):
+        if self.raise_exc_on_delete is not None:
+            raise self.raise_exc_on_delete
+        self.deleted_receipts.append(kwargs.get("ReceiptHandle"))
+
+
+@pytest.fixture
+def fake_clients(monkeypatch):
+    fake_s3 = FakeS3Client()
+    fake_sqs = FakeSQSClient()
+    monkeypatch.setattr(app_module, "s3_client", fake_s3)
+    monkeypatch.setattr(app_module, "sqs_client", fake_sqs)
+    return fake_s3, fake_sqs
+
+
+@pytest.fixture
+def client():
+    app_module.app.config["TESTING"] = True
+    with app_module.app.test_client() as test_client:
+        yield test_client
 
 
 # ----- safe_json_load -----
