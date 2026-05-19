@@ -33,8 +33,7 @@ def upload_message_to_s3(message_body, message_id):
     bucket_name = os.getenv("BUCKET_NAME")
     if not bucket_name:
         raise RuntimeError("BUCKET_NAME is required")
-
-    key = f"emails/{message_id}-{int(time.time())}.json"
+    key = f"emails/{message_id}.json"
     logger.info("Uploading message %s to s3://%s/%s", message_id, bucket_name, key)
     s3_client.put_object(
         Bucket=bucket_name,

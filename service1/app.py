@@ -6,13 +6,11 @@ from datetime import datetime
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from flask import Flask, jsonify, request
-from flask_cors import CORS
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app)
 
 AWS_REGION = os.getenv("AWS_REGION", "us-east-2")
 QUEUE_URL = os.getenv("QUEUE_URL")

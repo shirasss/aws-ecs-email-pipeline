@@ -98,10 +98,21 @@ def test_upload_message_to_s3_writes_object(fake_clients):
     assert len(fake_s3.put_calls) == 1
     call = fake_s3.put_calls[0]
     assert call["Bucket"] == "email-pipeline-test-bucket"
-    assert call["Key"].startswith("emails/msg-123-")
-    assert call["Key"].endswith(".json")
+    assert call["Key"] == "emails/msg-123.json"
     assert call["ContentType"] == "application/json"
     assert json.loads(call["Body"].decode("utf-8")) == {"email_subject": "Test"}
+
+
+def test_upload_message_to_s3_is_idempotent_per_message_id(fake_clients):
+    """SQS at-least-once redelivery must not produce duplicate S3 objects:
+    two uploads of the same MessageId must target the same S3 key."""
+    fake_s3, _ = fake_clients
+
+    upload_message_to_s3({"email_subject": "A"}, "msg-dup")
+    upload_message_to_s3({"email_subject": "A-retry"}, "msg-dup")
+
+    assert len(fake_s3.put_calls) == 2
+    assert fake_s3.put_calls[0]["Key"] == fake_s3.put_calls[1]["Key"] == "emails/msg-dup.json"
 
 
 def test_upload_message_to_s3_missing_bucket_raises(fake_clients, monkeypatch):
@@ -143,8 +154,8 @@ def test_process_messages_happy_path_uploads_and_deletes(fake_clients):
     process_messages(messages)
 
     assert len(fake_s3.put_calls) == 2
-    assert fake_s3.put_calls[0]["Key"].startswith("emails/m1-")
-    assert fake_s3.put_calls[1]["Key"].startswith("emails/m2-")
+    assert fake_s3.put_calls[0]["Key"] == "emails/m1.json"
+    assert fake_s3.put_calls[1]["Key"] == "emails/m2.json"
     assert fake_sqs.deleted_receipts == ["r1", "r2"]
 
 
