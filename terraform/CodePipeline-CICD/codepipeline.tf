@@ -18,7 +18,26 @@ locals {
     "scripts/trivy-scan.sh",
   ]
 }
+variable "github_repository_id" {
+  description = "GitHub repository ID for CodePipeline source (format: owner/repo). Set in terraform.tfvars."
+  type        = string
 
+  validation {
+    condition     = can(regex("^[^/]+/[^/]+$", var.github_repository_id))
+    error_message = "github_repository_id must be in the form owner/repo (e.g. my-user/ecs_solution)."
+  }
+}
+
+variable "github_branch" {
+  description = "Git branch tracked by CodePipeline"
+  type        = string
+  default     = "main"
+}
+variable "aws_region" {
+  description = "AWS region for ECS resources"
+  type        = string
+  default     = "us-east-2"
+}
 resource "aws_codestarconnections_connection" "github" {
   name          = "email-pipeline-github"
   provider_type = "GitHub"
